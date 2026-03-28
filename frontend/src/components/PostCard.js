@@ -70,37 +70,35 @@ export default function PostCard({ post, currentUser, onDeleted, onUpdated, onVo
   };
 
   return (
-    <div data-testid={`post-card-${post.id}`} className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
+    <div data-testid={`post-card-${post.id}`} className="bg-white border border-[#E2E8F0] rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-200 overflow-hidden">
       <div className="flex">
         {/* Vote column */}
-        <div className="flex flex-col items-center py-4 px-2 md:px-3 bg-[#F8FAFC] border-r border-[#E2E8F0] shrink-0">
-          <button
-            data-testid={`post-upvote-btn-${post.id}`}
-            onClick={() => handleVote('up')}
-            disabled={voting}
-            className={`p-1 rounded-md transition-all ${
-              userVote === 'up' ? 'text-[#CC0000] bg-[#CC0000]/10' : 'text-[#64748B] hover:text-[#CC0000] hover:bg-[#CC0000]/5'
-            }`}
-          >
-            <ChevronUp className="w-5 h-5" strokeWidth={userVote === 'up' ? 3 : 2} />
-          </button>
-          <span data-testid={`post-upvote-count-${post.id}`} className={`text-xs font-bold my-0.5 ${userVote === 'up' ? 'text-[#CC0000]' : 'text-[#0F172A]'}`}>
-            {post.upvote_count || 0}
-          </span>
-          <div className="w-4 h-px bg-[#E2E8F0] my-0.5" />
-          <span data-testid={`post-downvote-count-${post.id}`} className={`text-xs font-bold my-0.5 ${userVote === 'down' ? 'text-[#3B82F6]' : 'text-[#0F172A]'}`}>
-            {post.downvote_count || 0}
-          </span>
-          <button
-            data-testid={`post-downvote-btn-${post.id}`}
-            onClick={() => handleVote('down')}
-            disabled={voting}
-            className={`p-1 rounded-md transition-all ${
-              userVote === 'down' ? 'text-[#3B82F6] bg-[#3B82F6]/10' : 'text-[#64748B] hover:text-[#3B82F6] hover:bg-[#3B82F6]/5'
-            }`}
-          >
-            <ChevronDown className="w-5 h-5" strokeWidth={userVote === 'down' ? 3 : 2} />
-          </button>
+        <div className="flex flex-col items-center py-4 px-2 md:px-3 shrink-0">
+          <div className="flex items-center gap-1 bg-[#F0F4FA] rounded-full px-1.5 py-1">
+            <button
+              data-testid={`post-upvote-btn-${post.id}`}
+              onClick={() => handleVote('up')}
+              disabled={voting}
+              className={`p-1.5 rounded-full transition-all ${
+                userVote === 'up' ? 'text-[#CC0000] bg-[#CC0000]/10' : 'text-[#64748B] hover:text-[#CC0000] hover:bg-[#CC0000]/5'
+              }`}
+            >
+              <ChevronUp className="w-4 h-4" strokeWidth={userVote === 'up' ? 3 : 2} />
+            </button>
+            <span data-testid={`post-upvote-count-${post.id}`} className={`text-xs font-bold min-w-[20px] text-center ${userVote === 'up' ? 'text-[#CC0000]' : userVote === 'down' ? 'text-[#3B82F6]' : 'text-[#0F172A]'}`}>
+              {(post.upvote_count || 0) - (post.downvote_count || 0)}
+            </span>
+            <button
+              data-testid={`post-downvote-btn-${post.id}`}
+              onClick={() => handleVote('down')}
+              disabled={voting}
+              className={`p-1.5 rounded-full transition-all ${
+                userVote === 'down' ? 'text-[#3B82F6] bg-[#3B82F6]/10' : 'text-[#64748B] hover:text-[#3B82F6] hover:bg-[#3B82F6]/5'
+              }`}
+            >
+              <ChevronDown className="w-4 h-4" strokeWidth={userVote === 'down' ? 3 : 2} />
+            </button>
+          </div>
         </div>
 
         {/* Content area */}

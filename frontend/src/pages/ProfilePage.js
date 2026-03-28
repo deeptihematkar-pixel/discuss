@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
-import { User, Calendar, FileText, LogOut, Loader2, Lock } from 'lucide-react';
+import { FileText, LogOut, Loader2, AlertTriangle } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, logout } = useAuth();
@@ -13,69 +13,50 @@ export default function ProfilePage() {
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
-    if (user?.id) {
-      api.get(`/users/${user.id}/stats`).then(({ data }) => setStats(data)).catch(() => {});
-    }
+    if (user?.id) api.get(`/users/${user.id}/stats`).then(({ data }) => setStats(data)).catch(() => {});
   }, [user]);
 
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    await logout();
-    navigate('/');
-  };
+  const handleLogout = async () => { setLoggingOut(true); await logout(); navigate('/'); };
 
-  const formatDate = (iso) => {
-    if (!iso) return 'Unknown';
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
+  const initials = (user?.username || 'U').slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F0F4FA]">
       <Header />
-      <div className="max-w-lg mx-auto px-4 md:px-8 py-10">
-        <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-[0_2px_8px_rgba(0,0,0,0.04)] p-6 md:p-8">
-          <div className="flex flex-col items-center mb-6">
-            <div className="w-20 h-20 rounded-full bg-[#CC0000]/10 flex items-center justify-center mb-4">
-              <User className="w-9 h-9 text-[#CC0000]" />
-            </div>
-            <h1 data-testid="profile-username" className="font-heading text-2xl font-bold text-[#0F172A]">{user?.username}</h1>
-            <p data-testid="profile-email" className="text-[#64748B] text-[13px] md:text-[15px]">{user?.email}</p>
+      <div className="max-w-sm mx-auto px-4 py-10">
+        <div className="bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] p-8 text-center">
+          {/* Avatar */}
+          <div className="w-24 h-24 rounded-full bg-[#CC0000] flex items-center justify-center mx-auto mb-5 shadow-lg shadow-[#CC0000]/20">
+            <span className="text-white text-2xl font-bold">{initials}</span>
           </div>
 
-          <div className="space-y-4 mb-6">
-            <div className="flex items-center gap-3 p-3 bg-[#F8FAFC] rounded-lg">
-              <Calendar className="w-5 h-5 text-[#3B82F6]" />
-              <div>
-                <p className="text-[10px] md:text-xs uppercase tracking-[0.2em] font-bold text-[#64748B]">Member since</p>
-                <p data-testid="profile-created-at" className="text-[#0F172A] text-[13px] md:text-[15px] font-medium">{formatDate(user?.created_at)}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-[#F8FAFC] rounded-lg">
-              <FileText className="w-5 h-5 text-[#3B82F6]" />
-              <div>
-                <p className="text-[10px] md:text-xs uppercase tracking-[0.2em] font-bold text-[#64748B]">Total posts</p>
-                <p data-testid="profile-post-count" className="text-[#0F172A] text-[13px] md:text-[15px] font-medium">
-                  {stats ? stats.post_count : <Loader2 className="w-4 h-4 animate-spin inline" />}
-                </p>
-              </div>
-            </div>
+          <h1 data-testid="profile-username" className="font-heading text-xl font-bold text-[#0F172A]">{user?.username}</h1>
+          <p data-testid="profile-email" className="text-[#64748B] text-[13px] mt-0.5">{user?.email}</p>
+
+          {/* Stats */}
+          <div className="inline-flex items-center gap-2 bg-[#F0F4FA] rounded-full px-4 py-2 mt-4">
+            <FileText className="w-4 h-4 text-[#CC0000]" />
+            <span data-testid="profile-post-count" className="text-[#0F172A] text-[13px] font-semibold">
+              {stats ? `${stats.post_count} Total Posts` : <Loader2 className="w-3.5 h-3.5 animate-spin inline" />}
+            </span>
           </div>
 
-          <div className="bg-[#F1F5F9] rounded-lg p-3 mb-6 flex items-center gap-2">
-            <Lock className="w-4 h-4 text-[#64748B]" />
-            <p data-testid="profile-password-notice" className="text-[#64748B] text-[13px]">Password change is not possible for now.</p>
+          {/* Password notice */}
+          <div className="bg-[#FEF3C7] rounded-xl p-3 mt-6 flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-[#D97706] shrink-0" />
+            <p data-testid="profile-password-notice" className="text-[#92400E] text-[13px] text-left">Password change is not possible for now.</p>
           </div>
 
-          <Button
-            data-testid="profile-logout-btn"
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="w-full bg-[#F1F5F9] text-[#0F172A] hover:bg-[#E2E8F0] rounded-md py-2.5 font-medium"
-          >
+          {/* Logout */}
+          <Button data-testid="profile-logout-btn" onClick={handleLogout} disabled={loggingOut}
+            className="w-full bg-[#CC0000]/10 hover:bg-[#CC0000]/20 text-[#CC0000] font-semibold rounded-full py-3 h-12 mt-6 transition-all">
             {loggingOut ? <Loader2 className="w-4 h-4 animate-spin" /> : <><LogOut className="w-4 h-4 mr-2" /> Logout</>}
           </Button>
         </div>
+
+        <p className="text-center text-[#94A3B8] text-xs mt-6">
+          Managed by <span className="font-semibold text-[#CC0000]">&lt;discuss&gt;</span>
+        </p>
       </div>
     </div>
   );

@@ -134,7 +134,7 @@ export default function FeedPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F0F4FA]">
       <Header />
       
       {isOffline && (
