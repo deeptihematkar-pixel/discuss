@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 
 const LOGO_URL = 'https://customer-assets.emergentagent.com/job_8b258d09-2813-4c39-875f-1044b1a2ed97/artifacts/bnfmcn2l_rqVRL__1_-removebg-preview.png';
 
@@ -28,15 +29,60 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  
+  // Real-time validation states
+  const [usernameStatus, setUsernameStatus] = useState(null); // null | 'checking' | 'available' | 'taken' | 'invalid'
+  const [emailStatus, setEmailStatus] = useState(null);
+  const usernameTimer = useRef(null);
+  const emailTimer = useRef(null);
+  
   const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+
+  // Real-time username check
+  useEffect(() => {
+    if (usernameTimer.current) clearTimeout(usernameTimer.current);
+    if (!username.trim()) { setUsernameStatus(null); return; }
+    if (username.trim().length < 2) { setUsernameStatus('invalid'); return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(username.trim())) { setUsernameStatus('invalid'); return; }
+    
+    setUsernameStatus('checking');
+    usernameTimer.current = setTimeout(async () => {
+      try {
+        const { data } = await api.get(`/auth/check-username/${username.trim()}`);
+        setUsernameStatus(data.available ? 'available' : 'taken');
+      } catch {
+        setUsernameStatus(null);
+      }
+    }, 500);
+  }, [username]);
+
+  // Real-time email check
+  useEffect(() => {
+    if (emailTimer.current) clearTimeout(emailTimer.current);
+    if (!email.trim()) { setEmailStatus(null); return; }
+    if (!/^[^@]+@[^@]+\.[^@]+$/.test(email.trim())) { setEmailStatus('invalid'); return; }
+    
+    setEmailStatus('checking');
+    emailTimer.current = setTimeout(async () => {
+      try {
+        const { data } = await api.get(`/auth/check-email/${email.trim()}`);
+        setEmailStatus(data.available ? 'available' : 'taken');
+      } catch {
+        setEmailStatus(null);
+      }
+    }, 500);
+  }, [email]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (!username.trim()) return setError('Username is required');
     if (username.trim().length < 2) return setError('Username must be at least 2 characters');
+    if (!/^[a-zA-Z0-9_]+$/.test(username.trim())) return setError('Username can only contain letters, numbers, and underscores');
+    if (usernameStatus === 'taken') return setError(`Username "${username}" is already taken`);
     if (!email.trim()) return setError('Email is required');
+    if (emailStatus === 'taken') return setError('This email is already registered');
     if (!password) return setError('Password is required');
     if (password.length < 6) return setError('Password must be at least 6 characters');
     if (password !== confirmPw) return setError('Passwords do not match');
@@ -58,9 +104,18 @@ export default function RegisterPage() {
     setGoogleLoading(false);
     if (result.success) {
       navigate('/feed');
-    } else {
+    } else if (result.error) {
       setError(result.error);
     }
+  };
+
+  const renderFieldStatus = (status, messages) => {
+    if (!status) return null;
+    if (status === 'checking') return <span className="text-[#64748B] text-xs flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Checking...</span>;
+    if (status === 'available') return <span className="text-[#10B981] text-xs flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> {messages?.available || 'Available'}</span>;
+    if (status === 'taken') return <span className="text-[#EF4444] text-xs flex items-center gap-1"><XCircle className="w-3 h-3" /> {messages?.taken || 'Already taken'}</span>;
+    if (status === 'invalid') return <span className="text-[#F59E0B] text-xs flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {messages?.invalid || 'Invalid'}</span>;
+    return null;
   };
 
   return (
@@ -75,12 +130,12 @@ export default function RegisterPage() {
         </div>
         <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-[0_2px_8px_rgba(0,0,0,0.04)] p-6 md:p-8">
           {error && (
-            <div data-testid="register-error" className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-md p-3 text-[#EF4444] text-[13px] mb-4">
-              {error}
+            <div data-testid="register-error" className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-md p-3 text-[#EF4444] text-[13px] mb-4 flex items-start gap-2">
+              <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
           )}
 
-          {/* Google Sign-Up */}
           <Button
             type="button"
             data-testid="register-google-btn"
@@ -98,18 +153,35 @@ export default function RegisterPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label htmlFor="username" className="text-[#0F172A] text-[13px] md:text-[15px] font-medium">Username</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="username" className="text-[#0F172A] text-[13px] md:text-[15px] font-medium">Username</Label>
+                {renderFieldStatus(usernameStatus, {
+                  available: 'Username is available!',
+                  taken: `"${username}" is taken`,
+                  invalid: 'Letters, numbers, _ only (min 2)'
+                })}
+              </div>
               <Input
                 id="username"
                 data-testid="register-username-input"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Choose a username"
-                className="mt-1.5 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md"
+                className={`mt-1.5 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md ${
+                  usernameStatus === 'taken' ? 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]/20' :
+                  usernameStatus === 'available' ? 'border-[#10B981] focus:border-[#10B981] focus:ring-[#10B981]/20' : ''
+                }`}
               />
             </div>
             <div>
-              <Label htmlFor="email" className="text-[#0F172A] text-[13px] md:text-[15px] font-medium">Email</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="email" className="text-[#0F172A] text-[13px] md:text-[15px] font-medium">Email</Label>
+                {renderFieldStatus(emailStatus, {
+                  available: 'Email is available!',
+                  taken: 'Email already registered',
+                  invalid: 'Enter a valid email'
+                })}
+              </div>
               <Input
                 id="email"
                 type="email"
@@ -117,7 +189,10 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="mt-1.5 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md"
+                className={`mt-1.5 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md ${
+                  emailStatus === 'taken' ? 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]/20' :
+                  emailStatus === 'available' ? 'border-[#10B981] focus:border-[#10B981] focus:ring-[#10B981]/20' : ''
+                }`}
               />
             </div>
             <div>
@@ -136,6 +211,9 @@ export default function RegisterPage() {
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              {password && password.length < 6 && (
+                <span className="text-[#F59E0B] text-xs mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> At least 6 characters needed</span>
+              )}
             </div>
             <div>
               <Label htmlFor="confirmPw" className="text-[#0F172A] text-[13px] md:text-[15px] font-medium">Confirm Password</Label>
@@ -148,11 +226,14 @@ export default function RegisterPage() {
                 placeholder="Repeat your password"
                 className="mt-1.5 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md"
               />
+              {confirmPw && password !== confirmPw && (
+                <span className="text-[#EF4444] text-xs mt-1 flex items-center gap-1"><XCircle className="w-3 h-3" /> Passwords do not match</span>
+              )}
             </div>
             <Button
               type="submit"
               data-testid="register-submit-btn"
-              disabled={loading}
+              disabled={loading || usernameStatus === 'taken' || emailStatus === 'taken'}
               className="w-full bg-[#CC0000] text-white hover:bg-[#A30000] rounded-md py-2.5 font-medium shadow-sm mt-2"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Account'}

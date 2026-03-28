@@ -11,18 +11,18 @@ import logging
 import uuid
 import bcrypt
 import jwt
-import requests
+import requests as http_requests
 import json
+import re
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
 # Firebase Realtime Database URL
 FIREBASE_DB_URL = os.environ.get('FIREBASE_DB_URL', 'https://discuss-13fbc-default-rtdb.firebaseio.com')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'd9f2c8a7e4b1f6d3a0e5c9b2f8d4a7e1c6b3f0d5a8e2c7b4f1d6a3e0c5b9f2')
 JWT_ALGORITHM = "HS256"
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -31,45 +31,40 @@ api_router = APIRouter(prefix="/api")
 
 # --- Firebase RTDB helpers ---
 def fb_get(path):
-    """GET data from Firebase RTDB"""
     url = f"{FIREBASE_DB_URL}/{path}.json"
-    resp = requests.get(url, timeout=10)
+    resp = http_requests.get(url, timeout=10)
     if resp.status_code == 200:
         return resp.json()
     logger.error(f"Firebase GET {path} failed: {resp.status_code} {resp.text}")
     return None
 
 def fb_put(path, data):
-    """PUT (set) data at Firebase RTDB path"""
     url = f"{FIREBASE_DB_URL}/{path}.json"
-    resp = requests.put(url, json=data, timeout=10)
+    resp = http_requests.put(url, json=data, timeout=10)
     if resp.status_code == 200:
         return resp.json()
     logger.error(f"Firebase PUT {path} failed: {resp.status_code} {resp.text}")
     return None
 
 def fb_post(path, data):
-    """POST (push) data to Firebase RTDB path, returns generated key"""
     url = f"{FIREBASE_DB_URL}/{path}.json"
-    resp = requests.post(url, json=data, timeout=10)
+    resp = http_requests.post(url, json=data, timeout=10)
     if resp.status_code == 200:
         return resp.json()
     logger.error(f"Firebase POST {path} failed: {resp.status_code} {resp.text}")
     return None
 
 def fb_patch(path, data):
-    """PATCH (update) data at Firebase RTDB path"""
     url = f"{FIREBASE_DB_URL}/{path}.json"
-    resp = requests.patch(url, json=data, timeout=10)
+    resp = http_requests.patch(url, json=data, timeout=10)
     if resp.status_code == 200:
         return resp.json()
     logger.error(f"Firebase PATCH {path} failed: {resp.status_code} {resp.text}")
     return None
 
 def fb_delete(path):
-    """DELETE data at Firebase RTDB path"""
     url = f"{FIREBASE_DB_URL}/{path}.json"
-    resp = requests.delete(url, timeout=10)
+    resp = http_requests.delete(url, timeout=10)
     return resp.status_code == 200
 
 # --- Password helpers ---
@@ -114,6 +109,12 @@ def get_current_user(request: Request) -> dict:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+# --- Extract hashtags from text ---
+def extract_hashtags(text: str) -> list:
+    if not text:
+        return []
+    return list(set(re.findall(r'#(\w+)', text)))
+
 # --- Pydantic models ---
 class RegisterRequest(BaseModel):
     username: str
@@ -125,17 +126,19 @@ class LoginRequest(BaseModel):
     password: str
 
 class CreatePostRequest(BaseModel):
-    type: str  # "discussion" or "project"
+    type: str
     title: str
     content: str
     github_link: Optional[str] = ""
     preview_link: Optional[str] = ""
+    hashtags: Optional[List[str]] = []
 
 class UpdatePostRequest(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     github_link: Optional[str] = None
     preview_link: Optional[str] = None
+    hashtags: Optional[List[str]] = None
 
 class CreateCommentRequest(BaseModel):
     text: str
@@ -157,20 +160,24 @@ async def register(req: RegisterRequest, response: Response):
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
     if len(username) < 2:
         raise HTTPException(status_code=400, detail="Username must be at least 2 characters")
+    if not re.match(r'^[a-zA-Z0-9_]+$', username):
+        raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, and underscores")
+    if not re.match(r'^[^@]+@[^@]+\.[^@]+$', email):
+        raise HTTPException(status_code=400, detail="Please enter a valid email address")
 
-    # Check if email already exists
     users = fb_get("users") or {}
     for uid, udata in users.items():
         if udata.get("email", "").lower() == email:
-            raise HTTPException(status_code=400, detail="Email already registered")
+            raise HTTPException(status_code=400, detail="This email is already registered. Try signing in instead.")
         if udata.get("username", "").lower() == username.lower():
-            raise HTTPException(status_code=400, detail="Username already taken")
+            raise HTTPException(status_code=400, detail=f"Username \"{username}\" is already taken. Please choose another.")
 
     user_id = str(uuid.uuid4())
     user_data = {
         "username": username,
         "email": email,
         "password_hash": hash_password(req.password),
+        "auth_provider": "email",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     fb_put(f"users/{user_id}", user_data)
@@ -189,10 +196,20 @@ async def register(req: RegisterRequest, response: Response):
 @api_router.post("/auth/login")
 async def login(req: LoginRequest, response: Response):
     email = req.email.lower().strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    if not req.password:
+        raise HTTPException(status_code=400, detail="Password is required")
+
     users = fb_get("users") or {}
     
     for uid, udata in users.items():
         if udata.get("email", "").lower() == email:
+            # Check if this is a Google-only account
+            if udata.get("auth_provider") == "google" and not udata.get("password_hash"):
+                raise HTTPException(status_code=400, detail="This account uses Google sign-in. Please use 'Continue with Google' to log in.")
+            if not udata.get("password_hash"):
+                raise HTTPException(status_code=400, detail="This account uses Google sign-in. Please use 'Continue with Google' to log in.")
             if verify_password(req.password, udata["password_hash"]):
                 token = create_access_token(uid, udata["username"], udata["email"])
                 response.set_cookie(key="access_token", value=token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
@@ -204,9 +221,9 @@ async def login(req: LoginRequest, response: Response):
                     "token": token
                 }
             else:
-                raise HTTPException(status_code=401, detail="Invalid password")
+                raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
     
-    raise HTTPException(status_code=401, detail="No account found with this email")
+    raise HTTPException(status_code=404, detail="No account found with this email. Please check your email or sign up.")
 
 @api_router.post("/auth/logout")
 async def logout(response: Response):
@@ -223,10 +240,12 @@ async def google_auth(req: GoogleAuthRequest, response: Response):
     email = req.email.lower().strip()
     display_name = req.display_name.strip() or email.split("@")[0]
     
-    # Check if user already exists by email
     users = fb_get("users") or {}
     for uid, udata in users.items():
         if udata.get("email", "").lower() == email:
+            # Update photo if changed
+            if req.photo_url and req.photo_url != udata.get("photo_url", ""):
+                fb_patch(f"users/{uid}", {"photo_url": req.photo_url})
             token = create_access_token(uid, udata["username"], udata["email"])
             response.set_cookie(key="access_token", value=token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
             return {
@@ -234,14 +253,14 @@ async def google_auth(req: GoogleAuthRequest, response: Response):
                 "username": udata["username"],
                 "email": udata["email"],
                 "created_at": udata.get("created_at", ""),
-                "photo_url": udata.get("photo_url", ""),
+                "photo_url": udata.get("photo_url", req.photo_url or ""),
                 "token": token
             }
     
-    # Create new user from Google auth
     user_id = req.uid or str(uuid.uuid4())
-    # Generate unique username from display name
-    base_username = display_name.replace(" ", "").lower()[:15]
+    base_username = re.sub(r'[^a-zA-Z0-9_]', '', display_name.replace(" ", "")).lower()[:15]
+    if not base_username:
+        base_username = email.split("@")[0].replace(".", "")[:15]
     username = base_username
     counter = 1
     for uid, udata in users.items():
@@ -271,18 +290,43 @@ async def google_auth(req: GoogleAuthRequest, response: Response):
         "token": token
     }
 
+# --- Check username availability ---
+@api_router.get("/auth/check-username/{username}")
+async def check_username(username: str):
+    users = fb_get("users") or {}
+    for uid, udata in users.items():
+        if udata.get("username", "").lower() == username.lower():
+            return {"available": False, "message": f"Username \"{username}\" is already taken"}
+    return {"available": True, "message": "Username is available"}
+
+# --- Check email availability ---
+@api_router.get("/auth/check-email/{email}")
+async def check_email(email: str):
+    email = email.lower().strip()
+    users = fb_get("users") or {}
+    for uid, udata in users.items():
+        if udata.get("email", "").lower() == email:
+            return {"available": False, "message": "This email is already registered"}
+    return {"available": True, "message": "Email is available"}
+
 # --- Posts endpoints ---
 @api_router.get("/posts")
-async def get_posts(request: Request):
-    get_current_user(request)  # Auth check
+async def get_posts(request: Request, search: Optional[str] = None):
+    get_current_user(request)
     posts_data = fb_get("posts") or {}
     likes_data = fb_get("likes") or {}
     comments_data = fb_get("comments") or {}
     
     posts_list = []
     for pid, pdata in posts_data.items():
-        post_likes = likes_data.get(pid, {}) or {}
-        post_comments = comments_data.get(pid, {}) or {}
+        if not pdata or not isinstance(pdata, dict):
+            continue
+        post_likes = likes_data.get(pid, {}) if likes_data else {}
+        post_comments = comments_data.get(pid, {}) if comments_data else {}
+        if not isinstance(post_likes, dict):
+            post_likes = {}
+        if not isinstance(post_comments, dict):
+            post_comments = {}
         posts_list.append({
             "id": pid,
             **pdata,
@@ -290,6 +334,20 @@ async def get_posts(request: Request):
             "comment_count": len(post_comments),
             "liked_by": list(post_likes.keys())
         })
+    
+    # Search filter
+    if search:
+        query = search.lower().strip()
+        filtered = []
+        for p in posts_list:
+            title_match = query in p.get("title", "").lower()
+            content_match = query in p.get("content", "").lower()
+            author_match = query in p.get("author_username", "").lower()
+            hashtag_match = any(query.lstrip('#') in tag.lower() for tag in (p.get("hashtags") or []))
+            type_match = query in p.get("type", "").lower()
+            if title_match or content_match or author_match or hashtag_match or type_match:
+                filtered.append(p)
+        posts_list = filtered
     
     posts_list.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return posts_list
@@ -302,12 +360,20 @@ async def create_post(req: CreatePostRequest, request: Request):
     if not req.title.strip():
         raise HTTPException(status_code=400, detail="Title is required")
     
+    # Extract hashtags from content + explicit hashtags
+    content_hashtags = extract_hashtags(req.content)
+    title_hashtags = extract_hashtags(req.title)
+    all_hashtags = list(set((req.hashtags or []) + content_hashtags + title_hashtags))
+    # Clean hashtags
+    all_hashtags = [tag.lower().strip() for tag in all_hashtags if tag.strip()]
+    
     post_data = {
         "type": req.type,
         "title": req.title.strip(),
         "content": req.content.strip(),
         "github_link": req.github_link.strip() if req.github_link else "",
         "preview_link": req.preview_link.strip() if req.preview_link else "",
+        "hashtags": all_hashtags,
         "author_username": user["username"],
         "author_id": user["id"],
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -341,6 +407,13 @@ async def update_post(post_id: str, req: UpdatePostRequest, request: Request):
     if req.preview_link is not None:
         updates["preview_link"] = req.preview_link.strip()
     
+    # Re-extract hashtags
+    content_hashtags = extract_hashtags(updates.get("content", post.get("content", "")))
+    title_hashtags = extract_hashtags(updates.get("title", post.get("title", "")))
+    explicit = req.hashtags if req.hashtags is not None else (post.get("hashtags") or [])
+    updates["hashtags"] = list(set(explicit + content_hashtags + title_hashtags))
+    updates["hashtags"] = [t.lower().strip() for t in updates["hashtags"] if t.strip()]
+    
     if updates:
         fb_patch(f"posts/{post_id}", updates)
     
@@ -348,6 +421,10 @@ async def update_post(post_id: str, req: UpdatePostRequest, request: Request):
     updated["id"] = post_id
     likes = fb_get(f"likes/{post_id}") or {}
     comments = fb_get(f"comments/{post_id}") or {}
+    if not isinstance(likes, dict):
+        likes = {}
+    if not isinstance(comments, dict):
+        comments = {}
     updated["like_count"] = len(likes)
     updated["comment_count"] = len(comments)
     updated["liked_by"] = list(likes.keys())
@@ -384,6 +461,8 @@ async def toggle_like(post_id: str, request: Request):
         liked = True
     
     all_likes = fb_get(f"likes/{post_id}") or {}
+    if not isinstance(all_likes, dict):
+        all_likes = {}
     like_count = len(all_likes)
     
     return {"liked": liked, "like_count": like_count, "liked_by": list(all_likes.keys())}
@@ -393,9 +472,12 @@ async def toggle_like(post_id: str, request: Request):
 async def get_comments(post_id: str, request: Request):
     get_current_user(request)
     comments_data = fb_get(f"comments/{post_id}") or {}
+    if not isinstance(comments_data, dict):
+        return []
     comments_list = []
     for cid, cdata in comments_data.items():
-        comments_list.append({"id": cid, **cdata})
+        if isinstance(cdata, dict):
+            comments_list.append({"id": cid, **cdata})
     comments_list.sort(key=lambda x: x.get("timestamp", ""))
     return comments_list
 
@@ -438,8 +520,21 @@ async def delete_comment(post_id: str, comment_id: str, request: Request):
 async def get_user_stats(user_id: str, request: Request):
     get_current_user(request)
     posts_data = fb_get("posts") or {}
-    post_count = sum(1 for p in posts_data.values() if p.get("author_id") == user_id)
+    post_count = sum(1 for p in posts_data.values() if isinstance(p, dict) and p.get("author_id") == user_id)
     return {"post_count": post_count}
+
+# --- Trending hashtags ---
+@api_router.get("/hashtags/trending")
+async def get_trending_hashtags(request: Request):
+    get_current_user(request)
+    posts_data = fb_get("posts") or {}
+    tag_counts = {}
+    for pid, pdata in posts_data.items():
+        if isinstance(pdata, dict):
+            for tag in (pdata.get("hashtags") or []):
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+    sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    return [{"tag": t, "count": c} for t, c in sorted_tags]
 
 # Health check
 @api_router.get("/")

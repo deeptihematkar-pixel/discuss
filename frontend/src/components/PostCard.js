@@ -1,20 +1,14 @@
 import { useState } from 'react';
-import api, { formatApiError } from '@/lib/api';
+import api from '@/lib/api';
 import CommentsSection from '@/components/CommentsSection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Heart, MessageSquare, Pencil, Trash2, Github, ExternalLink, X, Check, Loader2 } from 'lucide-react';
+import { Heart, MessageSquare, Pencil, Trash2, Github, ExternalLink, X, Check, Loader2, Hash } from 'lucide-react';
 
 function timeAgo(iso) {
   if (!iso) return '';
@@ -25,11 +19,13 @@ function timeAgo(iso) {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `${weeks}w ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export default function PostCard({ post, currentUser, onDeleted, onUpdated, onLikeToggled }) {
+export default function PostCard({ post, currentUser, onDeleted, onUpdated, onLikeToggled, onTagClick }) {
   const [showComments, setShowComments] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(post.title);
@@ -44,6 +40,7 @@ export default function PostCard({ post, currentUser, onDeleted, onUpdated, onLi
   const isAuthor = currentUser?.id === post.author_id;
   const isLiked = (post.liked_by || []).includes(currentUser?.id);
   const isProject = post.type === 'project';
+  const hashtags = post.hashtags || [];
 
   const handleLike = async () => {
     if (liking) return;
@@ -51,60 +48,39 @@ export default function PostCard({ post, currentUser, onDeleted, onUpdated, onLi
     try {
       const { data } = await api.post(`/posts/${post.id}/like`);
       onLikeToggled(post.id, data);
-    } catch (err) {
-      console.error('Like failed:', err);
-    } finally {
-      setLiking(false);
-    }
+    } catch {} finally { setLiking(false); }
   };
 
   const handleSaveEdit = async () => {
     setSaving(true);
     try {
       const payload = { title: editTitle, content: editContent };
-      if (isProject) {
-        payload.github_link = editGithub;
-        payload.preview_link = editPreview;
-      }
+      if (isProject) { payload.github_link = editGithub; payload.preview_link = editPreview; }
       const { data } = await api.put(`/posts/${post.id}`, payload);
       onUpdated(data);
       setEditing(false);
-    } catch (err) {
-      console.error('Edit failed:', err);
-    } finally {
-      setSaving(false);
-    }
+    } catch {} finally { setSaving(false); }
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    try {
-      await api.delete(`/posts/${post.id}`);
-      onDeleted(post.id);
-    } catch (err) {
-      console.error('Delete failed:', err);
-    } finally {
-      setDeleting(false);
-      setShowDeleteConfirm(false);
-    }
+    try { await api.delete(`/posts/${post.id}`); onDeleted(post.id); } catch {} finally { setDeleting(false); setShowDeleteConfirm(false); }
   };
 
   return (
     <div data-testid={`post-card-${post.id}`} className="bg-white border border-[#E2E8F0] rounded-xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
       <div className="p-5">
-        {/* Header row */}
+        {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              data-testid={`post-badge-${post.id}`}
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <span data-testid={`post-badge-${post.id}`}
               className={isProject
                 ? 'bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20 rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0'
                 : 'bg-[#FF6B6B]/10 text-[#CC0000] border border-[#FF6B6B]/20 rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0'
-              }
-            >
+              }>
               {isProject ? 'Project' : 'Discussion'}
             </span>
-            <span data-testid={`post-author-${post.id}`} className="font-semibold text-[#0F172A] text-[13px] md:text-[15px] truncate">{post.author_username}</span>
+            <span data-testid={`post-author-${post.id}`} className="font-semibold text-[#0F172A] text-[13px] md:text-[15px]">{post.author_username}</span>
             <span className="text-[#64748B] text-xs shrink-0">{timeAgo(post.timestamp)}</span>
           </div>
           {isAuthor && !editing && (
@@ -123,7 +99,7 @@ export default function PostCard({ post, currentUser, onDeleted, onUpdated, onLi
         {editing ? (
           <div className="space-y-3">
             <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Title" className="bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6]" />
-            <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} placeholder="Content" rows={3} className="bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] resize-none" />
+            <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} placeholder="Content (use #hashtags inline)" rows={3} className="bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] resize-none" />
             {isProject && (
               <>
                 <Input value={editGithub} onChange={(e) => setEditGithub(e.target.value)} placeholder="GitHub link" className="bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6]" />
@@ -143,6 +119,22 @@ export default function PostCard({ post, currentUser, onDeleted, onUpdated, onLi
           <>
             <h3 data-testid={`post-title-${post.id}`} className="font-semibold text-[#0F172A] text-[15px] md:text-[17px] mb-1.5 leading-snug">{post.title}</h3>
             <p data-testid={`post-content-${post.id}`} className="text-[#0F172A] text-[13px] md:text-[15px] leading-relaxed whitespace-pre-wrap">{post.content}</p>
+            
+            {/* Hashtags */}
+            {hashtags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {hashtags.map((tag) => (
+                  <button
+                    key={tag}
+                    data-testid={`post-hashtag-${tag}`}
+                    onClick={() => onTagClick && onTagClick(tag)}
+                    className="inline-flex items-center gap-0.5 bg-[#F1F5F9] hover:bg-[#3B82F6]/10 border border-transparent hover:border-[#3B82F6]/20 rounded-full px-2 py-0.5 text-xs font-medium text-[#64748B] hover:text-[#3B82F6] transition-all"
+                  >
+                    <Hash className="w-3 h-3" />{tag}
+                  </button>
+                ))}
+              </div>
+            )}
             
             {/* Project links */}
             {isProject && (post.github_link || post.preview_link) && (
@@ -168,36 +160,23 @@ export default function PostCard({ post, currentUser, onDeleted, onUpdated, onLi
       {/* Actions bar */}
       {!editing && (
         <div className="flex items-center gap-1 px-3 py-2 border-t border-[#E2E8F0] bg-[#F8FAFC]/50">
-          <button
-            data-testid={`post-like-btn-${post.id}`}
-            onClick={handleLike}
-            disabled={liking}
+          <button data-testid={`post-like-btn-${post.id}`} onClick={handleLike} disabled={liking}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors ${
-              isLiked
-                ? 'text-[#CC0000] bg-[#CC0000]/8 hover:bg-[#CC0000]/15'
-                : 'text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
-            }`}
-          >
+              isLiked ? 'text-[#CC0000] bg-[#CC0000]/8 hover:bg-[#CC0000]/15' : 'text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
+            }`}>
             <Heart className={`w-4 h-4 ${isLiked ? 'fill-[#CC0000]' : ''}`} />
             <span data-testid={`post-like-count-${post.id}`}>{post.like_count || 0}</span>
           </button>
-          <button
-            data-testid={`post-comments-btn-${post.id}`}
-            onClick={() => setShowComments(!showComments)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] transition-colors"
-          >
+          <button data-testid={`post-comments-btn-${post.id}`} onClick={() => setShowComments(!showComments)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] transition-colors">
             <MessageSquare className="w-4 h-4" />
             <span data-testid={`post-comment-count-${post.id}`}>{post.comment_count || 0}</span>
           </button>
         </div>
       )}
 
-      {/* Comments */}
-      {showComments && (
-        <CommentsSection postId={post.id} currentUser={currentUser} />
-      )}
+      {showComments && <CommentsSection postId={post.id} currentUser={currentUser} />}
 
-      {/* Delete confirmation */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>

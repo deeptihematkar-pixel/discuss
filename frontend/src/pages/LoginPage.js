@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, XCircle } from 'lucide-react';
 
 const LOGO_URL = 'https://customer-assets.emergentagent.com/job_8b258d09-2813-4c39-875f-1044b1a2ed97/artifacts/bnfmcn2l_rqVRL__1_-removebg-preview.png';
 
@@ -51,7 +51,7 @@ export default function LoginPage() {
     setGoogleLoading(false);
     if (result.success) {
       navigate('/feed');
-    } else {
+    } else if (result.error) {
       setError(result.error);
     }
   };
@@ -68,12 +68,12 @@ export default function LoginPage() {
         </div>
         <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-[0_2px_8px_rgba(0,0,0,0.04)] p-6 md:p-8">
           {error && (
-            <div data-testid="login-error" className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-md p-3 text-[#EF4444] text-[13px] mb-4">
-              {error}
+            <div data-testid="login-error" className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-md p-3 text-[#EF4444] text-[13px] mb-4 flex items-start gap-2">
+              <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
           )}
 
-          {/* Google Sign-In */}
           <Button
             type="button"
             data-testid="login-google-btn"
@@ -97,7 +97,7 @@ export default function LoginPage() {
                 type="email"
                 data-testid="login-email-input"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setError(''); }}
                 placeholder="you@example.com"
                 className="mt-1.5 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md"
               />
@@ -110,7 +110,7 @@ export default function LoginPage() {
                   type={showPw ? 'text' : 'password'}
                   data-testid="login-password-input"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
                   placeholder="Enter your password"
                   className="bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md pr-10"
                 />

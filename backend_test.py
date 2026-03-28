@@ -114,14 +114,15 @@ class DiscussAPITester:
         return success
 
     def test_create_discussion_post(self):
-        """Test creating a discussion post"""
+        """Test creating a discussion post with hashtags"""
         post_data = {
             "type": "discussion",
-            "title": "Test Discussion Post",
-            "content": "This is a test discussion post created by the testing script."
+            "title": "Test Discussion Post #javascript #webdev",
+            "content": "This is a test discussion post created by the testing script. Let's talk about #react and #nodejs development.",
+            "hashtags": ["testing", "automation"]
         }
         success, response = self.run_test(
-            "Create Discussion Post",
+            "Create Discussion Post with Hashtags",
             "POST",
             "posts",
             200,
@@ -130,20 +131,24 @@ class DiscussAPITester:
         if success and 'id' in response:
             self.created_post_id = response['id']
             print(f"   Created post ID: {self.created_post_id}")
+            # Check if hashtags were extracted and included
+            hashtags = response.get('hashtags', [])
+            print(f"   Post hashtags: {hashtags}")
             return True
         return False
 
     def test_create_project_post(self):
-        """Test creating a project post"""
+        """Test creating a project post with hashtags"""
         post_data = {
             "type": "project",
-            "title": "Test Project Post",
-            "content": "This is a test project post with links.",
+            "title": "Test Project Post #python #api",
+            "content": "This is a test project post with links and #fastapi hashtags.",
             "github_link": "https://github.com/test/repo",
-            "preview_link": "https://test-app.com"
+            "preview_link": "https://test-app.com",
+            "hashtags": ["backend", "database"]
         }
         success, response = self.run_test(
-            "Create Project Post",
+            "Create Project Post with Hashtags",
             "POST",
             "posts",
             200,
@@ -152,6 +157,8 @@ class DiscussAPITester:
         if success and 'id' in response:
             project_post_id = response['id']
             print(f"   Created project post ID: {project_post_id}")
+            hashtags = response.get('hashtags', [])
+            print(f"   Project hashtags: {hashtags}")
             return True
         return False
 
@@ -319,6 +326,142 @@ class DiscussAPITester:
             self.user_id = None
         return success
 
+    def test_check_username_availability(self):
+        """Test username availability check"""
+        # Test available username
+        success, response = self.run_test(
+            "Check Username Available",
+            "GET",
+            "auth/check-username/newuser123",
+            200
+        )
+        if success:
+            print(f"   Available: {response.get('available')}")
+        
+        # Test taken username
+        success2, response2 = self.run_test(
+            "Check Username Taken",
+            "GET",
+            "auth/check-username/testuser",
+            200
+        )
+        if success2:
+            print(f"   Available: {response2.get('available')}")
+        
+        return success and success2
+
+    def test_check_email_availability(self):
+        """Test email availability check"""
+        # Test available email
+        success, response = self.run_test(
+            "Check Email Available",
+            "GET",
+            "auth/check-email/newemail@test.com",
+            200
+        )
+        if success:
+            print(f"   Available: {response.get('available')}")
+        
+        # Test taken email
+        success2, response2 = self.run_test(
+            "Check Email Taken",
+            "GET",
+            "auth/check-email/testuser@discuss.com",
+            200
+        )
+        if success2:
+            print(f"   Available: {response2.get('available')}")
+        
+        return success and success2
+
+    def test_search_posts(self):
+        """Test post search functionality"""
+        # Search by title
+        success1, response1 = self.run_test(
+            "Search Posts by Title",
+            "GET",
+            "posts?search=Test Discussion",
+            200
+        )
+        if success1:
+            print(f"   Found {len(response1)} posts by title")
+        
+        # Search by hashtag
+        success2, response2 = self.run_test(
+            "Search Posts by Hashtag",
+            "GET",
+            "posts?search=javascript",
+            200
+        )
+        if success2:
+            print(f"   Found {len(response2)} posts by hashtag")
+        
+        # Search by content
+        success3, response3 = self.run_test(
+            "Search Posts by Content",
+            "GET",
+            "posts?search=fastapi",
+            200
+        )
+        if success3:
+            print(f"   Found {len(response3)} posts by content")
+        
+        return success1 and success2 and success3
+
+    def test_trending_hashtags(self):
+        """Test trending hashtags endpoint"""
+        success, response = self.run_test(
+            "Get Trending Hashtags",
+            "GET",
+            "hashtags/trending",
+            200
+        )
+        if success:
+            print(f"   Found {len(response)} trending hashtags")
+            if response:
+                print(f"   Top hashtag: {response[0].get('tag')} ({response[0].get('count')} posts)")
+        return success
+
+    def test_auth_error_messages(self):
+        """Test detailed auth error messages"""
+        # Test wrong password
+        success1, response1 = self.run_test(
+            "Login Wrong Password",
+            "POST",
+            "auth/login",
+            401,
+            data={"email": "testuser@discuss.com", "password": "wrongpassword"}
+        )
+        
+        # Test non-existent email
+        success2, response2 = self.run_test(
+            "Login Non-existent Email",
+            "POST",
+            "auth/login",
+            404,
+            data={"email": "nonexistent@test.com", "password": "password"}
+        )
+        
+        # Test duplicate username registration
+        success3, response3 = self.run_test(
+            "Register Duplicate Username",
+            "POST",
+            "auth/register",
+            400,
+            data={"username": "testuser", "email": "new@test.com", "password": "password"}
+        )
+        
+        # Test duplicate email registration
+        success4, response4 = self.run_test(
+            "Register Duplicate Email",
+            "POST",
+            "auth/register",
+            400,
+            data={"username": "newuser", "email": "testuser@discuss.com", "password": "password"}
+        )
+        
+        return success1 and success2 and success3 and success4
+
 def main():
     print("🚀 Starting Discuss API Testing...")
     print("=" * 50)
@@ -328,12 +471,16 @@ def main():
     # Test sequence
     tests = [
         ("API Health Check", tester.test_health_check),
+        ("Check Username Availability", tester.test_check_username_availability),
+        ("Check Email Availability", tester.test_check_email_availability),
         ("Register New User", tester.test_register_new_user),
         ("Get Current User Info", tester.test_get_current_user),
         ("Get Posts (Empty)", tester.test_get_posts_empty),
-        ("Create Discussion Post", tester.test_create_discussion_post),
-        ("Create Project Post", tester.test_create_project_post),
+        ("Create Discussion Post with Hashtags", tester.test_create_discussion_post),
+        ("Create Project Post with Hashtags", tester.test_create_project_post),
         ("Get Posts (With Data)", tester.test_get_posts_with_data),
+        ("Search Posts", tester.test_search_posts),
+        ("Get Trending Hashtags", tester.test_trending_hashtags),
         ("Like Post", tester.test_like_post),
         ("Unlike Post", tester.test_unlike_post),
         ("Get Comments (Empty)", tester.test_get_comments_empty),
@@ -348,6 +495,7 @@ def main():
         ("Login Existing User", tester.test_login_existing_user),
         ("Get Current User Info (Existing)", tester.test_get_current_user),
         ("Get User Stats (Existing)", tester.test_get_user_stats),
+        ("Test Auth Error Messages", tester.test_auth_error_messages),
     ]
     
     print(f"\n📋 Running {len(tests)} tests...")
