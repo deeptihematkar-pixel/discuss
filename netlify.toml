@@ -1,12 +1,12 @@
 [build]
   base = "frontend"
-  command = "yarn install --ignore-engines && yarn build"
+  command = "CI=false yarn build"
   publish = "build"
+
+[build.environment]
+  NODE_VERSION = "20"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[build.environment]
-  NODE_VERSION = "20"

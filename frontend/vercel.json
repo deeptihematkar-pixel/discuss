@@ -1,6 +1,5 @@
 {
-  "framework": "create-react-app",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!static|manifest|service-worker|robots|sitemap|favicon|.well-known).*)", "destination": "/index.html" }
   ]
 }

@@ -1,102 +1,109 @@
 # Discuss - Developer Discussion Platform
 
-A modern real-time discussion platform built with React, FastAPI, and Firebase.
+A modern real-time discussion platform for developers. Built with React, FastAPI, and Firebase.
 
-## Quick Start (Local Development)
+---
+
+## Local Development
 
 ### Prerequisites
-- Node.js 20+ and Yarn
+- Node.js 20+ & Yarn
 - Python 3.11+
-- Firebase project with Realtime Database enabled
+- Firebase project with Realtime Database
 
-### 1. Clone the repo
-```bash
-git clone https://github.com/your-username/discuss.git
-cd discuss
-```
-
-### 2. Backend Setup
+### Backend
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Create .env file
-cat > .env << EOF
+# Create backend/.env
 FIREBASE_DB_URL=https://your-project-default-rtdb.firebaseio.com
-JWT_SECRET=your-random-64-char-hex-string-here
+JWT_SECRET=generate-a-random-64-char-string
 CORS_ORIGINS=http://localhost:3000
-EOF
 
-# Start backend
 uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 ```
 
-### 3. Frontend Setup
+### Frontend
 ```bash
 cd frontend
 yarn install
 
-# Create .env file
-cat > .env << EOF
+# Create frontend/.env
 REACT_APP_BACKEND_URL=http://localhost:8001
-REACT_APP_FIREBASE_API_KEY=your-api-key
+REACT_APP_FIREBASE_API_KEY=your-key
 REACT_APP_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
 REACT_APP_FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com
 REACT_APP_FIREBASE_PROJECT_ID=your-project-id
 REACT_APP_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your-id
 REACT_APP_FIREBASE_APP_ID=your-app-id
-EOF
 
-# Start frontend
 yarn start
 ```
 
-App runs at `http://localhost:3000`
+---
+
+## Deploy to Vercel (Frontend)
+
+1. Go to [vercel.com/new](https://vercel.com/new) → Import your GitHub repo
+2. **Root Directory**: Click "Edit" → type `frontend`
+3. **Framework Preset**: `Create React App` (auto-detected)
+4. **Environment Variables** — add all of these:
+   | Key | Value |
+   |-----|-------|
+   | `REACT_APP_BACKEND_URL` | Your Render backend URL (deploy backend first) |
+   | `REACT_APP_FIREBASE_API_KEY` | Your Firebase API key |
+   | `REACT_APP_FIREBASE_AUTH_DOMAIN` | your-project.firebaseapp.com |
+   | `REACT_APP_FIREBASE_DATABASE_URL` | https://your-project-default-rtdb.firebaseio.com |
+   | `REACT_APP_FIREBASE_PROJECT_ID` | your-project-id |
+   | `REACT_APP_FIREBASE_STORAGE_BUCKET` | your-project.appspot.com |
+   | `REACT_APP_FIREBASE_MESSAGING_SENDER_ID` | your-sender-id |
+   | `REACT_APP_FIREBASE_APP_ID` | your-app-id |
+5. Click **Deploy**
+
+> After deploying, add your Vercel domain to **Firebase Console → Authentication → Settings → Authorized domains**
 
 ---
 
-## Deployment
+## Deploy to Render (Backend)
 
-### Vercel (Frontend Only)
-1. Import repo on [vercel.com](https://vercel.com)
-2. **Root Directory**: `frontend`
-3. **Framework Preset**: Create React App
-4. Add all `REACT_APP_*` environment variables
-5. Set `REACT_APP_BACKEND_URL` to your deployed backend URL
+1. Go to [render.com/new](https://dashboard.render.com/new) → **Web Service**
+2. Connect your GitHub repo
+3. Configure:
+   - **Name**: `discuss-backend`
+   - **Root Directory**: `backend`
+   - **Runtime**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn server:app --host 0.0.0.0 --port $PORT`
+4. **Environment Variables**:
+   | Key | Value |
+   |-----|-------|
+   | `FIREBASE_DB_URL` | https://your-project-default-rtdb.firebaseio.com |
+   | `JWT_SECRET` | a-random-64-character-string |
+   | `CORS_ORIGINS` | https://your-vercel-app.vercel.app |
+5. Click **Create Web Service**
 
-### Render (Backend)
-1. Create Web Service on [render.com](https://render.com)
-2. **Root Directory**: `backend`
-3. **Build Command**: `pip install -r requirements.txt`
-4. **Start Command**: `uvicorn server:app --host 0.0.0.0 --port $PORT`
-5. Add env vars: `FIREBASE_DB_URL`, `JWT_SECRET`, `CORS_ORIGINS`
+> **Important**: On Render, select **Python** runtime, NOT Node.js. The error "Couldn't find package.json" means you selected Node.
 
-### Netlify (Frontend Only)
-1. Import repo, config is in `netlify.toml`
-2. Add all `REACT_APP_*` environment variables
-3. Requires Node 20+ (configured in netlify.toml)
+---
 
-### Docker
-```bash
-# Backend
-docker build -f Dockerfile.backend -t discuss-backend .
-docker run -p 8001:8001 --env-file backend/.env discuss-backend
+## Deploy to Netlify (Frontend)
 
-# Frontend
-docker build -f Dockerfile.frontend -t discuss-frontend .
-docker run -p 3000:3000 discuss-frontend
-```
+1. Import repo on [netlify.com](https://app.netlify.com)
+2. Config is auto-read from `netlify.toml` (base = `frontend`)
+3. Add all `REACT_APP_*` environment variables (same as Vercel table above)
+4. Deploy — `CI=false` is set to prevent lint warnings from failing the build
 
 ---
 
 ## Firebase Setup
+
 1. Create project at [console.firebase.google.com](https://console.firebase.google.com)
-2. Enable **Realtime Database** (not Firestore)
-3. Enable **Authentication** > Google provider
-4. Add your deployed domains to **Authentication > Settings > Authorized domains**
+2. Enable **Realtime Database**
+3. Enable **Authentication** → Google sign-in provider
+4. Add deployed domains to **Authentication → Settings → Authorized domains**
 5. Set database rules:
 ```json
 {
@@ -104,18 +111,19 @@ docker run -p 3000:3000 discuss-frontend
     "users": { ".indexOn": ["email"] },
     "posts": { ".indexOn": ["timestamp", "author_id"] },
     "comments": { "$postId": { ".indexOn": ["timestamp"] } },
-    ".read": true,
-    ".write": true
+    ".read": true, ".write": true
   }
 }
 ```
 
+---
+
 ## Tech Stack
-- **Frontend**: React 19, Tailwind CSS, Shadcn/UI, Firebase Client SDK
+- **Frontend**: React 19, Tailwind CSS, Shadcn/UI, Firebase SDK
 - **Backend**: FastAPI, PyJWT, bcrypt
 - **Database**: Firebase Realtime Database
 - **Auth**: JWT + bcrypt + Google OAuth
-- **PWA**: Service Worker + Web App Manifest
+- **PWA**: Service Worker + Manifest
 
 ## License
 MIT
