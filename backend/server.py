@@ -140,6 +140,12 @@ class UpdatePostRequest(BaseModel):
 class CreateCommentRequest(BaseModel):
     text: str
 
+class GoogleAuthRequest(BaseModel):
+    uid: str
+    email: str
+    display_name: str
+    photo_url: Optional[str] = ""
+
 # --- Auth endpoints ---
 @api_router.post("/auth/register")
 async def register(req: RegisterRequest, response: Response):
@@ -211,6 +217,59 @@ async def logout(response: Response):
 async def get_me(request: Request):
     user = get_current_user(request)
     return user
+
+@api_router.post("/auth/google")
+async def google_auth(req: GoogleAuthRequest, response: Response):
+    email = req.email.lower().strip()
+    display_name = req.display_name.strip() or email.split("@")[0]
+    
+    # Check if user already exists by email
+    users = fb_get("users") or {}
+    for uid, udata in users.items():
+        if udata.get("email", "").lower() == email:
+            token = create_access_token(uid, udata["username"], udata["email"])
+            response.set_cookie(key="access_token", value=token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
+            return {
+                "id": uid,
+                "username": udata["username"],
+                "email": udata["email"],
+                "created_at": udata.get("created_at", ""),
+                "photo_url": udata.get("photo_url", ""),
+                "token": token
+            }
+    
+    # Create new user from Google auth
+    user_id = req.uid or str(uuid.uuid4())
+    # Generate unique username from display name
+    base_username = display_name.replace(" ", "").lower()[:15]
+    username = base_username
+    counter = 1
+    for uid, udata in users.items():
+        if udata.get("username", "").lower() == username.lower():
+            username = f"{base_username}{counter}"
+            counter += 1
+    
+    user_data = {
+        "username": username,
+        "email": email,
+        "password_hash": "",
+        "photo_url": req.photo_url or "",
+        "auth_provider": "google",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    fb_put(f"users/{user_id}", user_data)
+    
+    token = create_access_token(user_id, username, email)
+    response.set_cookie(key="access_token", value=token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
+    
+    return {
+        "id": user_id,
+        "username": username,
+        "email": email,
+        "created_at": user_data["created_at"],
+        "photo_url": req.photo_url or "",
+        "token": token
+    }
 
 # --- Posts endpoints ---
 @api_router.get("/posts")
