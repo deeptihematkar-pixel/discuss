@@ -4,9 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MessageSquare, FolderGit2, Loader2, Hash, X } from 'lucide-react';
 
 export default function CreatePostModal({ open, onClose, onCreated }) {
@@ -20,60 +18,31 @@ export default function CreatePostModal({ open, onClose, onCreated }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const reset = () => {
-    setPostType('discussion');
-    setTitle('');
-    setContent('');
-    setGithubLink('');
-    setPreviewLink('');
-    setHashtagInput('');
-    setHashtags([]);
-    setError('');
-  };
+  const reset = () => { setPostType('discussion'); setTitle(''); setContent(''); setGithubLink(''); setPreviewLink(''); setHashtagInput(''); setHashtags([]); setError(''); };
 
   const addHashtag = () => {
     const tag = hashtagInput.trim().replace(/^#/, '').toLowerCase();
-    if (tag && !hashtags.includes(tag)) {
-      setHashtags([...hashtags, tag]);
-    }
+    if (tag && !hashtags.includes(tag)) setHashtags([...hashtags, tag]);
     setHashtagInput('');
   };
 
   const handleHashtagKeyDown = (e) => {
-    if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
-      e.preventDefault();
-      addHashtag();
-    }
-  };
-
-  const removeHashtag = (tag) => {
-    setHashtags(hashtags.filter((t) => t !== tag));
+    if (e.key === 'Enter' || e.key === ',' || e.key === ' ') { e.preventDefault(); addHashtag(); }
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    if (!title.trim()) return setError('Title is required');
+    e.preventDefault(); setError('');
+    if (postType === 'project' && !title.trim()) return setError('Project title is required');
     if (!content.trim()) return setError('Content is required');
-
     setLoading(true);
     try {
-      const payload = {
-        type: postType,
-        title: title.trim(),
-        content: content.trim(),
-        github_link: postType === 'project' ? githubLink.trim() : '',
-        preview_link: postType === 'project' ? previewLink.trim() : '',
-        hashtags: hashtags,
-      };
-      const { data } = await api.post('/posts', payload);
-      onCreated(data);
-      reset();
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to create post');
-    } finally {
-      setLoading(false);
-    }
+      const { data } = await api.post('/posts', {
+        type: postType, title: postType === 'project' ? title.trim() : '',
+        content: content.trim(), github_link: postType === 'project' ? githubLink.trim() : '',
+        preview_link: postType === 'project' ? previewLink.trim() : '', hashtags,
+      });
+      onCreated(data); reset();
+    } catch (err) { setError(err.response?.data?.detail || 'Failed to create post'); } finally { setLoading(false); }
   };
 
   return (
@@ -82,44 +51,38 @@ export default function CreatePostModal({ open, onClose, onCreated }) {
         <DialogHeader>
           <DialogTitle className="font-heading text-xl font-bold text-[#0F172A]">Create a post</DialogTitle>
         </DialogHeader>
-        
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          {error && (
-            <div data-testid="create-post-error" className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-md p-3 text-[#EF4444] text-[13px]">{error}</div>
-          )}
+          {error && <div data-testid="create-post-error" className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-md p-3 text-[#EF4444] text-[13px]">{error}</div>}
 
-          {/* Post type selector */}
           <div className="grid grid-cols-2 gap-3">
             <button type="button" data-testid="create-post-type-discussion" onClick={() => setPostType('discussion')}
-              className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                postType === 'discussion' ? 'border-[#CC0000] bg-[#CC0000]/5' : 'border-[#E2E8F0] hover:border-[#CC0000]/30'
-              }`}>
+              className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${postType === 'discussion' ? 'border-[#CC0000] bg-[#CC0000]/5' : 'border-[#E2E8F0] hover:border-[#CC0000]/30'}`}>
               <MessageSquare className={`w-5 h-5 ${postType === 'discussion' ? 'text-[#CC0000]' : 'text-[#64748B]'}`} />
               <span className={`text-[13px] md:text-[15px] font-medium ${postType === 'discussion' ? 'text-[#CC0000]' : 'text-[#64748B]'}`}>Discussion</span>
             </button>
             <button type="button" data-testid="create-post-type-project" onClick={() => setPostType('project')}
-              className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                postType === 'project' ? 'border-[#3B82F6] bg-[#3B82F6]/5' : 'border-[#E2E8F0] hover:border-[#3B82F6]/30'
-              }`}>
+              className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${postType === 'project' ? 'border-[#3B82F6] bg-[#3B82F6]/5' : 'border-[#E2E8F0] hover:border-[#3B82F6]/30'}`}>
               <FolderGit2 className={`w-5 h-5 ${postType === 'project' ? 'text-[#3B82F6]' : 'text-[#64748B]'}`} />
               <span className={`text-[13px] md:text-[15px] font-medium ${postType === 'project' ? 'text-[#3B82F6]' : 'text-[#64748B]'}`}>Project</span>
             </button>
           </div>
 
-          <div>
-            <Label className="text-[#0F172A] text-[13px] md:text-[15px] font-medium">Title</Label>
-            <Input data-testid="create-post-title" value={title} onChange={(e) => setTitle(e.target.value)}
-              placeholder={postType === 'project' ? 'Project name' : 'What do you want to discuss?'}
-              className="mt-1.5 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md" />
-          </div>
+          {/* Title only for project posts */}
+          {postType === 'project' && (
+            <div>
+              <Label className="text-[#0F172A] text-[13px] md:text-[15px] font-medium">Project Title</Label>
+              <Input data-testid="create-post-title" value={title} onChange={(e) => setTitle(e.target.value)}
+                placeholder="Your project name" className="mt-1.5 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md" />
+            </div>
+          )}
 
           <div>
             <Label className="text-[#0F172A] text-[13px] md:text-[15px] font-medium">
-              {postType === 'project' ? 'Description' : 'Content'}
+              {postType === 'project' ? 'Description' : "What's on your mind?"}
             </Label>
             <Textarea data-testid="create-post-content" value={content} onChange={(e) => setContent(e.target.value)}
-              placeholder={postType === 'project' ? 'Describe your project... (use #hashtags inline)' : 'Share your thoughts... (use #hashtags inline)'}
-              rows={4} className="mt-1.5 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md resize-none" />
+              placeholder={postType === 'project' ? 'Describe your project... (use #hashtags inline)' : 'Share your thoughts, ideas, questions... (use #hashtags inline)'}
+              rows={postType === 'discussion' ? 5 : 4} className="mt-1.5 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md resize-none" />
           </div>
 
           {/* Hashtags */}
@@ -131,23 +94,16 @@ export default function CreatePostModal({ open, onClose, onCreated }) {
                   {hashtags.map((tag) => (
                     <span key={tag} className="inline-flex items-center gap-1 bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20 rounded-full px-2.5 py-0.5 text-xs font-medium">
                       <Hash className="w-3 h-3" />{tag}
-                      <button type="button" onClick={() => removeHashtag(tag)} className="ml-0.5 hover:text-[#CC0000]"><X className="w-3 h-3" /></button>
+                      <button type="button" onClick={() => setHashtags(hashtags.filter(t => t !== tag))} className="ml-0.5 hover:text-[#CC0000]"><X className="w-3 h-3" /></button>
                     </span>
                   ))}
                 </div>
               )}
               <div className="flex gap-2">
-                <Input
-                  data-testid="create-post-hashtag-input"
-                  value={hashtagInput}
-                  onChange={(e) => setHashtagInput(e.target.value)}
-                  onKeyDown={handleHashtagKeyDown}
-                  placeholder="Type a tag and press Enter"
-                  className="flex-1 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md text-[13px]"
-                />
-                <Button type="button" onClick={addHashtag} variant="outline" className="border-[#E2E8F0] text-[#64748B] hover:text-[#3B82F6] rounded-md px-3">
-                  <Hash className="w-4 h-4" />
-                </Button>
+                <Input data-testid="create-post-hashtag-input" value={hashtagInput} onChange={(e) => setHashtagInput(e.target.value)}
+                  onKeyDown={handleHashtagKeyDown} placeholder="Type a tag and press Enter"
+                  className="flex-1 bg-[#F1F5F9] border-transparent focus:bg-white focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 rounded-md text-[13px]" />
+                <Button type="button" onClick={addHashtag} variant="outline" className="border-[#E2E8F0] text-[#64748B] hover:text-[#3B82F6] rounded-md px-3"><Hash className="w-4 h-4" /></Button>
               </div>
               <p className="text-[#64748B] text-[11px] mt-1">Press Enter, Space, or comma to add. Hashtags in content are auto-detected.</p>
             </div>

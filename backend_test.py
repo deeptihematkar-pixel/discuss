@@ -114,15 +114,14 @@ class DiscussAPITester:
         return success
 
     def test_create_discussion_post(self):
-        """Test creating a discussion post with hashtags"""
+        """Test creating a discussion post with hashtags (NO title field)"""
         post_data = {
             "type": "discussion",
-            "title": "Test Discussion Post #javascript #webdev",
-            "content": "This is a test discussion post created by the testing script. Let's talk about #react and #nodejs development.",
+            "content": "This is a test discussion post created by the testing script. Let's talk about #react and #nodejs development. #javascript #webdev",
             "hashtags": ["testing", "automation"]
         }
         success, response = self.run_test(
-            "Create Discussion Post with Hashtags",
+            "Create Discussion Post with Hashtags (NO title)",
             "POST",
             "posts",
             200,
@@ -170,36 +169,55 @@ class DiscussAPITester:
             return len(response) > 0
         return False
 
-    def test_like_post(self):
-        """Test liking a post"""
+    def test_upvote_post(self):
+        """Test upvoting a post"""
         if not self.created_post_id:
-            print("❌ No post ID available for like test")
+            print("❌ No post ID available for upvote test")
             return False
         
         success, response = self.run_test(
-            "Like Post",
+            "Upvote Post",
             "POST",
-            f"posts/{self.created_post_id}/like",
-            200
+            f"posts/{self.created_post_id}/vote",
+            200,
+            data={"vote_type": "up"}
         )
         if success:
-            print(f"   Like status: {response.get('liked')}, Count: {response.get('like_count')}")
+            print(f"   Upvote count: {response.get('upvote_count')}, Downvote count: {response.get('downvote_count')}")
         return success
 
-    def test_unlike_post(self):
-        """Test unliking a post"""
+    def test_downvote_post(self):
+        """Test downvoting a post"""
         if not self.created_post_id:
-            print("❌ No post ID available for unlike test")
+            print("❌ No post ID available for downvote test")
             return False
         
         success, response = self.run_test(
-            "Unlike Post",
+            "Downvote Post",
             "POST",
-            f"posts/{self.created_post_id}/like",
-            200
+            f"posts/{self.created_post_id}/vote",
+            200,
+            data={"vote_type": "down"}
         )
         if success:
-            print(f"   Like status: {response.get('liked')}, Count: {response.get('like_count')}")
+            print(f"   Upvote count: {response.get('upvote_count')}, Downvote count: {response.get('downvote_count')}")
+        return success
+
+    def test_toggle_vote_off(self):
+        """Test toggling vote off (clicking same vote again)"""
+        if not self.created_post_id:
+            print("❌ No post ID available for vote toggle test")
+            return False
+        
+        success, response = self.run_test(
+            "Toggle Vote Off",
+            "POST",
+            f"posts/{self.created_post_id}/vote",
+            200,
+            data={"vote_type": "down"}
+        )
+        if success:
+            print(f"   Upvote count: {response.get('upvote_count')}, Downvote count: {response.get('downvote_count')}")
         return success
 
     def test_get_comments_empty(self):
@@ -481,8 +499,9 @@ def main():
         ("Get Posts (With Data)", tester.test_get_posts_with_data),
         ("Search Posts", tester.test_search_posts),
         ("Get Trending Hashtags", tester.test_trending_hashtags),
-        ("Like Post", tester.test_like_post),
-        ("Unlike Post", tester.test_unlike_post),
+        ("Upvote Post", tester.test_upvote_post),
+        ("Downvote Post", tester.test_downvote_post),
+        ("Toggle Vote Off", tester.test_toggle_vote_off),
         ("Get Comments (Empty)", tester.test_get_comments_empty),
         ("Create Comment", tester.test_create_comment),
         ("Get Comments (With Data)", tester.test_get_comments_with_data),

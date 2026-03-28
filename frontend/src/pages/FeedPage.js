@@ -62,9 +62,9 @@ export default function FeedPage() {
     return () => unsubscribe();
   }, [activeSearch, fetchTrendingTags]);
 
-  // Listen to likes and comments
+  // Listen to votes and comments
   useEffect(() => {
-    const likesRef = ref(database, 'likes');
+    const votesRef = ref(database, 'votes');
     const commentsRef = ref(database, 'comments');
     const refresh = async () => {
       try {
@@ -74,7 +74,7 @@ export default function FeedPage() {
         if (!activeSearch) cachePosts(data);
       } catch {}
     };
-    const unsub1 = onValue(likesRef, refresh, () => {});
+    const unsub1 = onValue(votesRef, refresh, () => {});
     const unsub2 = onValue(commentsRef, refresh, () => {});
     return () => { unsub1(); unsub2(); };
   }, [activeSearch]);
@@ -125,10 +125,10 @@ export default function FeedPage() {
     setPosts((prev) => prev.map((p) => (p.id === updatedPost.id ? updatedPost : p)));
   };
 
-  const handleLikeToggled = (postId, likeData) => {
+  const handleVoteChanged = (postId, voteData) => {
     setPosts((prev) =>
       prev.map((p) =>
-        p.id === postId ? { ...p, like_count: likeData.like_count, liked_by: likeData.liked_by } : p
+        p.id === postId ? { ...p, upvote_count: voteData.upvote_count, downvote_count: voteData.downvote_count, votes: voteData.votes } : p
       )
     );
   };
@@ -244,7 +244,7 @@ export default function FeedPage() {
                 currentUser={user}
                 onDeleted={handlePostDeleted}
                 onUpdated={handlePostUpdated}
-                onLikeToggled={handleLikeToggled}
+                onVoteChanged={handleVoteChanged}
                 onTagClick={handleTagClick}
               />
             ))}
